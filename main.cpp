@@ -1,56 +1,168 @@
 #include <iostream>
+#include <fstream>
 #include <unordered_map>
 #include <string>
-#include <ctime>
-
 using namespace std;
 
-class Event {
-public:
-    int event_id;
-    string event_name;
-    time_t event_time;  // Timestamp of when the event is scheduled
-    string event_details;
-
-    // Default constructor (required by unordered_map)
-    Event() : event_id(0), event_name(""), event_time(0), event_details("") {}
-
-    // Constructor to initialize the event with values
-    Event(int id, string name, time_t time, string details)
-        : event_id(id), event_name(name), event_time(time), event_details(details) {}
-
-    // Comparator function to define priority (earliest event has the highest priority)
-    bool operator>(const Event& other) const {
-        return event_time > other.event_time;  // Min-heap: earlier events should be at the top
-    }
-
-    // To display event details
-    void display() const {
-        cout << "Event ID: " << event_id
-             << ", Event Name: " << event_name
-             << ", Event Time: " << ctime(&event_time)  // Converts time_t to human-readable format
-             << ", Event Details: " << event_details << endl;
-    }
+struct Event {
+    string name;
+    string date;
+    string time;
 };
 
-int main() {
-    // Create an unordered_map to store events, where the key is the event_id
-    unordered_map<int, Event> event_map;
+unordered_map<string, string> users; // username -> password
+unordered_map<string, Event> events; // event name -> Event
 
-    // Sample data for events
-    event_map[1] = Event(1, "Event 1", time(0), "Details of event 1");
-    event_map[2] = Event(2, "Event 2", time(0) + 3600, "Details of event 2");  // 1 hour later
-    event_map[3] = Event(3, "Event 3", time(0) + 7200, "Details of event 3");  // 2 hours later
-
-    // Output events using the display method
-    cout << "List of Events: " << endl;
-    for (const auto& pair : event_map) {
-        pair.second.display();  // Calls the display method of each event object
+void loadUsers() {
+    ifstream infile("users.txt");
+    string username, password;
+    while (infile >> username >> password) {
+        users[username] = password;
     }
- 
-    // You can also use the priority defined by the `>` operator
-    // For example, you could sort the events by time, but the unordered_map
-    // doesn't maintain any order, so let's use a priority queue if needed.
+    infile.close();
+}
 
+void saveUsers() {
+    ofstream outfile("users.txt");
+    for (auto& [u, p] : users) {
+        outfile << u << " " << p << "\n";
+    }
+    outfile.close();
+}
+
+void loadEvents(const string& username) {
+    events.clear();
+    ifstream infile(username + "_events.txt");
+    string name, date, time;
+    while (getline(infile, name) && getline(infile, date) && getline(infile, time)) {
+        events[name] = {name, date, time};
+    }
+    infile.close();
+}
+
+void saveEvents(const string& username) {
+    ofstream outfile(username + "_events.txt");
+    for (auto& [_, e] : events) {
+        outfile << e.name << "\n" << e.date << "\n" << e.time << "\n";
+    }
+    outfile.close();
+}
+
+void registerUser() {
+    string username, password;
+    cout << "Enter username: ";
+    cin >> username;
+    if (users.find(username) != users.end()) {
+        cout << "User already registered. Please login.\n";
+        return;
+    }
+    cout << "Enter password: ";
+    cin >> password;
+    users[username] = password;
+    saveUsers();
+    cout << "Registration successful.\n";
+}
+
+bool loginUser(string& username) {
+    cout << "Enter username: ";
+    cin >> username;
+    cout << "Enter password: ";
+    string password;
+    cin >> password;
+    if (users.find(username) != users.end() && users[username] == password) {
+        cout << "Login successful.\n";
+        return true;
+    }
+    cout << "Invalid username or password.\n";
+    return false;
+}
+
+void addEvent() {
+    Event e;
+    cout << "Enter event name: ";
+    cin.ignore();
+    getline(cin, e.name);
+    cout << "Enter date (DD-MM-YYYY): ";
+    getline(cin, e.date);
+    cout << "Enter time (HH:MM): ";
+    getline(cin, e.time);
+    events[e.name] = e;
+    cout << "Event added.\n";
+}
+
+void updateEvent() {
+    string name;
+    cout << "Enter event name to update: ";
+    cin.ignore();
+    getline(cin, name);
+    if (events.find(name) == events.end()) {
+        cout << "Event not found.\n";
+        return;
+    }
+    cout << "Enter new date (DD-MM-YYYY): ";
+    getline(cin, events[name].date);
+    cout << "Enter new time (HH:MM): ";
+    getline(cin, events[name].time);
+    cout << "Event updated.\n";
+}
+
+void deleteEvent() {
+    string name;
+    cout << "Enter event name to delete: ";
+    cin.ignore();
+    getline(cin, name);
+    if (events.erase(name)) {
+        cout << "Event deleted.\n";
+    } else {
+        cout << "Event not found.\n";
+    }
+}
+
+void viewEvents() {
+    if (events.empty()) {
+        cout << "No events available.\n";
+        return;
+    }
+    for (auto& [_, e] : events) {
+        cout << "Event: " << e.name << "\nDate: " << e.date << "\nTime: " << e.time << "\n\n";
+    }
+}
+
+int main() {
+    loadUsers();
+    int choice;
+    string username;
+    do {
+        cout << "\n1. Register\n2. Login\n3. Exit\nChoose: ";
+        cin >> choice;
+        switch (choice) {
+            case 1:
+                registerUser();
+                break;
+            case 2:
+                if (loginUser(username)) {
+                    loadEvents(username);
+                    int ch;
+                    do {
+                        cout << "\n1. Add Event\n2. Update Event\n3. Delete Event\n4. View Events\n5. Save & Logout\nChoose: ";
+                        cin >> ch;
+                        switch (ch) {
+                            case 1: addEvent(); break;
+                            case 2: updateEvent(); break;
+                            case 3: deleteEvent(); break;
+                            case 4: viewEvents(); break;
+                            case 5: saveEvents(username); break;
+                            default: cout << "Invalid choice.\n";
+                        }
+                    } while (ch != 5);
+                }
+                break;
+            case 3:
+                cout << "Goodbye!\n";
+                break;
+            default:
+                cout << "Invalid choice.\n";
+        }
+    } while (choice != 3);
     return 0;
 }
